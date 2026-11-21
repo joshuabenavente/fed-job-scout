@@ -1,17 +1,10 @@
 import { useEffect, useState } from 'react'
 import { supabase, APP_NAME } from './supabase'
-
-const MIN_PASSWORD = 8
-
-function friendlyError(error) {
-  const msg = error?.message || String(error)
-  if (/database error saving new user/i.test(msg) || /invite-only/i.test(msg)) {
-    return "This app is invite-only. Ask Josh to add your email, then try again."
-  }
-  if (/invalid login credentials/i.test(msg)) return 'Email or password is incorrect.'
-  if (/already registered/i.test(msg)) return 'That email already has an account. Sign in instead.'
-  return msg
-}
+import { friendlyError, MIN_PASSWORD } from './lib/auth'
+import Jobs from './screens/Jobs'
+import Resume from './screens/Resume'
+import Searches from './screens/Searches'
+import Account from './screens/Account'
 
 function AuthScreen() {
   const [mode, setMode] = useState('signin') // 'signin' | 'signup'
@@ -91,66 +84,30 @@ function AuthScreen() {
   )
 }
 
-function AccountScreen({ session }) {
-  const [newPassword, setNewPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [msg, setMsg] = useState('')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
+const TABS = [
+  { id: 'jobs', label: 'Jobs' },
+  { id: 'resume', label: 'Resume' },
+  { id: 'searches', label: 'Searches' },
+  { id: 'account', label: 'Account' },
+]
 
-  async function changePassword(e) {
-    e.preventDefault()
-    setMsg(''); setError('')
-    if (newPassword.length < MIN_PASSWORD) return setError(`Use at least ${MIN_PASSWORD} characters.`)
-    if (newPassword !== confirm) return setError("Passwords don't match.")
-    setBusy(true)
-    const { error } = await supabase.auth.updateUser({ password: newPassword })
-    setBusy(false)
-    if (error) return setError(friendlyError(error))
-    setNewPassword(''); setConfirm('')
-    setMsg('Password changed.')
-  }
-
-  async function deleteAccount() {
-    const typed = window.prompt('This permanently deletes your account, resume, searches and drafts.\n\nType DELETE to confirm.')
-    if (typed !== 'DELETE') return
-    const { error } = await supabase.rpc('delete_my_account')
-    if (error) return setError(friendlyError(error))
-    await supabase.auth.signOut()
-  }
-
+function Shell({ session }) {
+  const [tab, setTab] = useState('jobs')
   return (
-    <main className="card">
-      <h1>{APP_NAME}</h1>
-      <p className="muted">Signed in as <strong>{session.user.email}</strong></p>
-
-      <section className="placeholder">
-        <h2>Coming next</h2>
-        <p className="muted">Your resume, saved searches, matching jobs and "I want to apply" drafts will live here.</p>
-      </section>
-
-      <section>
-        <h2>Change password</h2>
-        <form onSubmit={changePassword}>
-          <label>
-            New password
-            <input type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-          </label>
-          <label>
-            Confirm new password
-            <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-          </label>
-          {error && <p className="error" role="alert">{error}</p>}
-          {msg && <p className="ok">{msg}</p>}
-          <button className="primary" disabled={busy} type="submit">Save new password</button>
-        </form>
-      </section>
-
-      <section className="row">
-        <button type="button" onClick={() => supabase.auth.signOut()}>Sign out</button>
-        <button type="button" className="danger" onClick={deleteAccount}>Delete my account</button>
-      </section>
-    </main>
+    <div className="shell">
+      <header className="topbar"><h1>{APP_NAME}</h1></header>
+      <main className="card">
+        {tab === 'jobs' && <Jobs goTo={setTab} />}
+        {tab === 'resume' && <Resume session={session} />}
+        {tab === 'searches' && <Searches session={session} />}
+        {tab === 'account' && <Account session={session} />}
+      </main>
+      <nav className="tabbar">
+        {TABS.map((t) => (
+          <button key={t.id} type="button" className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>{t.label}</button>
+        ))}
+      </nav>
+    </div>
   )
 }
 
@@ -164,5 +121,5 @@ export default function App() {
   }, [])
 
   if (session === undefined) return <main className="card"><p className="muted">Loading…</p></main>
-  return session ? <AccountScreen session={session} /> : <AuthScreen />
+  return session ? <Shell session={session} /> : <AuthScreen />
 }
